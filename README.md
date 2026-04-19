@@ -85,3 +85,63 @@ Authorize the DHCP server
 <img width="735" height="651" alt="Screenshot 2026-04-18 161942" src="https://github.com/user-attachments/assets/b11cfe05-fe76-45b6-bb87-7d91d55c4462" />
 
 and lastly i have added two user 
+
+📌 About This Project
+This project documents the setup of a Windows 11 client machine configured with a static IP address and joined to an Active Directory domain (corp.soc-lab-dc.com). This is the foundation of my SOC home lab — designed to simulate a real enterprise network environment for blue team practice, log analysis, and SIEM monitoring.
+What this lab simulates:
+
+A real corporate Active Directory environment
+Domain-joined endpoints that generate Windows Event Logs
+A foundation for Wazuh/Splunk SIEM integration and alert monitoring
+
+
+🖥️ Lab Environment
+ComponentDetailsClient OSWindows 11Machine Nameproject-homelab-winclientDomaincorp.soc-lab-dc.comClient IP10.0.2.101 Subnet Mask255.255.255.0Default Gateway10.0.2.1DNS Server10.0.2.5 (Domain Controller)Domain User steve@corp.soc-lab-dcNetBIOS NamePROJECT-HOMELAB
+🔧 What I Did — Step by Step
+Step 1: Windows 11 Installation
+Installed a fresh Windows 11 virtual machine to serve as the domain client endpoint. Configured initial privacy settings with minimal data sharing — a security best practice for lab environments.
+Step 2: Static IP Configuration
+Configured a static IP address on the Windows client to ensure reliable communication with the Domain Controller:
+
+IP Address: 10.0.2.101
+Subnet Mask: 255.255.255.0
+Default Gateway: 10.0.2.1
+Preferred DNS: 10.0.2.5 (pointing to the DC so domain resolution works)
+<img width="975" height="730" alt="Screenshot 2026-04-19 165005" src="https://github.com/user-attachments/assets/5045a158-acc2-41cf-be02-7f7060c50a5a" />
+Step 3: Domain Join
+Joined the Windows 11 client to the Active Directory domain corp.soc-lab-dc.com:
+
+Navigated to System Properties → Computer Name → Change
+Set the DNS Suffix to corp.soc-lab-dc.com
+Set NetBIOS name to PROJECT-HOMELAB
+Selected Domain membership and entered corp.soc-lab-dc.com
+Authenticated with domain admin credentials (steve@corp.soc-lab-dc)
+
+Step 4: Verification
+Verified the domain join was successful using ipconfig /all in Command Prompt:
+
+Host Name: project-homelab-winclient
+Primary DNS Suffix: corp.soc-lab-dc.com
+DNS Suffix Search List: corp.soc-lab-dc.com
+DNS Server: 10.0.2.5
+Confirmed: "Welcome to the corp.soc-lab-dc.com domain" ✅
+<img width="972" height="604" alt="Screenshot 2026-04-19 173051" src="https://github.com/user-attachments/assets/1c562c7b-a8a4-40f5-baec-3035b3d33c79" />
+🧠 Key Concepts Learned
+
+Active Directory — centralized identity and access management for enterprise networks
+Static IP configuration — why endpoints in a lab need fixed addresses
+DNS and domain resolution — how the client finds and communicates with the Domain Controller
+Domain joining process — authentication flow using domain admin credentials
+NetBIOS naming — legacy naming system still used for backward compatibility
+ipconfig /all — how to verify network configuration and domain membership from the command line
+
+
+🔜 What's Next in This Lab
+This domain-joined client is the foundation. Here's what I'm building on top of it:
+
+ Install and configure Wazuh Agent on the Windows client
+ Forward Windows Event Logs to Wazuh SIEM
+ Simulate brute force login attacks and detect them in Wazuh
+ Configure Sysmon for enhanced endpoint telemetry
+ Map detections to MITRE ATT&CK framework
+ Add a Kali Linux attacker machine to simulate real threats
