@@ -20,6 +20,19 @@ Step 3: Backup & Replace smb.conf
 Move the default Samba config to preserve it, then create a fresh one:
 sudo mv /etc/samba/smb.conf /etc/samba/smb.conf.org
 sudo nano /etc/samba/smb.conf
+write paste this with realm of you active directory 
+[global]
+  kerberos method = secrets and keytab
+  realm = CORP.SOC-LAB-DC.COM
+  workgroup = CORP
+  security = ads
+  template shell = /bin/bash
+  winbind enum groups = Yes
+  winbind enum users = Yes
+  winbind separator = +
+  idmap config * : rangesize = 100000
+  idmap config * : range = 1000000-19999999
+  idmap config * : backend = autorid
 
 Step 4: Configure nsswitch.conf
 Add winbind to passwd and group lookups so Linux resolves AD users:
