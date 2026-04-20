@@ -1,0 +1,89 @@
+This is Part 2 of my SOC Home Lab series. After joining a Windows 11 client to my Active Directory domain (corp.soc-lab-dc.com) in Part 1, I now join an Ubuntu Linux machine to the same domain using Samba Winbind.
+In enterprise environments, Linux servers are commonly domain-joined so that Active Directory users can authenticate across both Windows and Linux systems. This is a critical concept for SOC analysts — because domain-joined Linux machines generate authentication logs and events that flow into your SIEM.
+Reference documentation: server-world.info
+Two Methods to Join Linux to Active Director
+1- sssd + realmd Simpler setup, modern environments
+2- Samba Winbind ✅ (used in this project) Full Samba integration, more control, enterprise standard
+first thing i did was installing linux using vitrualbox after i did i start with configuring static ip and dns on ubuntu
+Set a static IP address and point DNS to the Domain Controller so Ubuntu can resolve the domain name
+Via GUI (Network Manager → IPv4 → Manual):
+IP Address:  10.0.2.103
+Netmask:     255.255.255.0
+Gateway:     10.0.2.1
+DNS:         10.0.2.5
+
+Step 2: Install Samba Winbind Packages 
+sudo apt update
+sudo apt -y install winbind libpam-winbind libnss-winbind krb5-config samba-dsdb-modules samba-vfs-modules
+
+Step 3: Backup & Replace smb.conf
+Move the default Samba config to preserve it, then create a fresh one:
+sudo mv /etc/samba/smb.conf /etc/samba/smb.conf.org
+sudo nano /etc/samba/smb.conf
+
+Step 4: Configure nsswitch.conf
+Add winbind to passwd and group lookups so Linux resolves AD users:
+sudo nano /etc/nsswitch.conf
+passwd:   files systemd sss winbind
+group:    files systemd sss winbind
+Step 5: Enable PAM Winbind Authentication
+sudo pam-auth-update
+In the PAM configuration menu, ensure these are enabled:
+
+✅ Winbind NT/Active Directory authentication
+✅ Create home directory on login
+✅ Unix authentication
+
+Step 6: Configure DNS in resolv.conf
+Point the system DNS resolver to the Domain Controller:
+sudo nano /etc/resolv.conf
+Add/confirm:
+nameserver 10.0.2.5
+nameserver 127.0.0.53
+options edns0 trust-ad
+search .
+
+Step 7: Fix Hostname — NetBIOS 15 Character Limit
+The first domain join attempt failed with this error:
+Our netbios name can be at most 15 chars long, "PROJECT-HOMELAB-LINUX-C" is 23 chars long
+Invalid configuration. Exiting....
+Failed to join domain: The format of the specified computer name is invalid.
+Fix: Rename the hostname to 15 characters or fewer:
+sudo hostnamectl set-hostname proj-lab-lin-c
+
+Step 8: Join the Domain
+sudo net ads join -U Administrator
+
+  
+Enter the Administrator password when prompted. Successful output:
+Password for [CORP\Administrator]:
+Using short domain name -- CORP
+Joined 'PROJ-LAB-LIN-C' to dns domain 'corp.soc-lab-dc.com'
+
+
+Step 9: Restart Winbind Service
+bashsystemctl restart winbind
+
+Step 10: Verify Domain Join
+Check AD connection info:
+net ads info
+Expected output:
+LDAP server: 10.0.2.5
+LDAP server name: WIN-1MD9MNNGLGQ.corp.soc-lab-dc.com
+Realm: CORP.SOC-LAB-DC.COM
+Bind Path: dc=CORP,dc=SOC-LAB-DC,dc=COM
+LDAP port: 389
+KDC server: 10.0.2.5
+
+Step 11: Login as a Domain User
+sudo login
+
+When prompted for username, use the format:
+CORP+soso
+
+  
+Step 12: Verify in Active Directory Users and Computers
+On the Windows Domain Controller, open:
+Server Manager → Tools → Active Directory Users and Computers → corp.soc-lab-dc.com → Computers
+You will see PROJ-LAB-LIN-C listed alongside the Windows client — confirming the Linux machine is fully domain-joined. ✅
+PROJ-LAB-LIN-C    Computer    DNS: proj-lab-lin-c.corp.soc-lab-dc.com
