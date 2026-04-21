@@ -269,3 +269,93 @@ PROJ-LAB-LIN-C    Computer    DNS: proj-lab-lin-c.corp.soc-lab-dc.com
 <img width="446" height="182" alt="Screenshot 2026-04-20 161340" src="https://github.com/user-attachments/assets/7855f31e-0d54-4db7-ab27-84254028b5b4" />
 <img width="1100" height="348" alt="Screenshot 2026-04-20 161419" src="https://github.com/user-attachments/assets/db23b2fd-e141-41ee-a564-74769f322f33" />
 
+Linux Server Setup — Jumpbox & Docker Installation
+Overview
+In this section we set up our Linux Server (corp-svr), which acts as a Jumpbox (also called a Bastion Host) in our SOCLab network. A jumpbox is a dedicated server that acts as a secure gateway — instead of connecting directly to other machines in the network, all access goes through this Linux server first. This is a common security practice in enterprise environments to reduce the attack surface.
+We also joined this server to our Active Directory domain and installed Docker to prepare it for future containerized services.
+Hostname: corp-svr
+DNS Name: corp-svr.corp.soc-lab-dc.com
+IP Address: 10.0.2.106
+OS: Ubuntu 24.04.3 LTS
+Role: Jumpbox / Linux Server
+
+🖥️ Step 1: Clone the Linux VM (Full Clone)
+Instead of building a new VM from scratch, we cloned our existing Linux snapshot to save time. We used a Full Clone so the new VM is completely independent.
+Steps:
+<img width="1273" height="890" alt="Screenshot 2026-04-21 134923" src="https://github.com/user-attachments/assets/8c676bce-cb77-4960-baca-cfa0f94ab8d4" />
+
+In VirtualBox, right-click the existing Linux VM → Clone
+Set the new VM name: project-homelab-svr-lin
+Select Full Clone as the clone type
+Click Next → Finish
+![Uploading Screenshot 2026-04-21 134923.png…]()
+
+✏️ Step 2: Change the Hostname
+After cloning, the machine still had the old hostname. We updated it to reflect its new role.
+sudo hostnamectl set-hostname corp-svr
+Then we rebooted for the change to take effect. The terminal prompt now shows:
+project-homelab-admin@corp-svr:~$
+
+👤 Step 3: Create Admin User
+We created a dedicated admin user for managing this server instead of using the default account.
+bashsudo adduser project-homelab-admin
+Then granted this user sudo (admin) privileges:
+sudo usermod -aG sudo project-homelab-admin
+<img width="974" height="569" alt="Screenshot 2026-04-21 171224" src="https://github.com/user-attachments/assets/bbcb7f02-add1-421c-bb33-70c858d25085" />
+
+🌐 Step 4: Verify Network Configuration
+We checked the network settings to confirm the server received an IP from our DHCP server.
+SettingValueIP Address10.0.2.106 Default Gateway 10.0.2.1 DNS Server 10.0.2.5 (our Dc)
+<img width="745" height="600" alt="Screenshot 2026-04-21 172608" src="https://github.com/user-attachments/assets/f835df0f-f533-4d73-b36d-762a23f33140" />
+
+🔗 Step 5: Join the Active Directory Domain
+We joined the Linux server to our Active Directory domain using Winbind (the same method used for the Linux client).
+First we verified connectivity to the domain controller:
+bashping corp.soc-lab-dc.com
+Then joined the domain:
+sudo net ads join -U administrator
+Result: Joined 'CORP-SVR' to dns domain 'corp.soc-lab-dc.com' ✅
+<img width="1260" height="853" alt="Screenshot 2026-04-21 173255" src="https://github.com/user-attachments/assets/a47c4368-3e17-4e4b-ab2a-4fa260189eb5" />
+
+Verification — AD Users and Computers:
+We switched to the Windows Server and opened Active Directory Users and Computers to confirm the machine appeared under the Computers container.
+Result: CORP-SVR appeared in the domain with DNS name corp-svr.corp.soc-lab-dc.com ✅
+
+Domain Login Test:
+We logged into the Linux server using the domain administrator account to confirm authentication was working:
+sudo login
+# Login: CORP+Administrator
+Result: Successfully logged in as domain admin ✅
+<img width="955" height="589" alt="Screenshot 2026-04-21 174717" src="https://github.com/user-attachments/assets/373b976c-f503-4ffa-a3ef-0a162cb71e96" />
+
+🐳 Step 6: Install Docker
+We installed Docker on the Linux server following the official documentation at https://docs.docker.com/engine/install/ubuntu.
+Step 1 — Add Docker's official GPG key and repository:
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the Docker repository
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+<img width="885" height="811" alt="Screenshot 2026-04-21 175511" src="https://github.com/user-attachments/assets/f507f944-dc5a-4451-8792-5a4f5bad4925" />
+
+Step 2 — Install Docker packages:
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+<img width="542" height="292" alt="Screenshot 2026-04-21 175541" src="https://github.com/user-attachments/assets/52bad272-49a9-4aeb-a01e-0d305a38758d" />
+
+Step 3 — Verify Docker installation:
+sudo docker run hello-world
+<img width="1280" height="1027" alt="Screenshot 2026-04-21 181323" src="https://github.com/user-attachments/assets/ef184b1e-6d4e-47b4-9723-f12eb0b32bcc" />
+
+
