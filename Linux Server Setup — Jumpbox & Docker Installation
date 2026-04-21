@@ -1,0 +1,79 @@
+Linux Server Setup — Jumpbox & Docker Installation
+Overview
+In this section we set up our Linux Server (corp-svr), which acts as a Jumpbox (also called a Bastion Host) in our SOCLab network. A jumpbox is a dedicated server that acts as a secure gateway — instead of connecting directly to other machines in the network, all access goes through this Linux server first. This is a common security practice in enterprise environments to reduce the attack surface.
+We also joined this server to our Active Directory domain and installed Docker to prepare it for future containerized services.
+Hostname: corp-svr
+DNS Name: corp-svr.corp.soc-lab-dc.com
+IP Address: 10.0.2.106
+OS: Ubuntu 24.04.3 LTS
+Role: Jumpbox / Linux Server
+
+🖥️ Step 1: Clone the Linux VM (Full Clone)
+Instead of building a new VM from scratch, we cloned our existing Linux snapshot to save time. We used a Full Clone so the new VM is completely independent.
+Steps:
+
+In VirtualBox, right-click the existing Linux VM → Clone
+Set the new VM name: project-homelab-svr-lin
+Select Full Clone as the clone type
+Click Next → Finish
+
+✏️ Step 2: Change the Hostname
+After cloning, the machine still had the old hostname. We updated it to reflect its new role.
+bashsudo hostnamectl set-hostname corp-svr
+Then we rebooted for the change to take effect. The terminal prompt now shows:
+project-homelab-admin@corp-svr:~$
+
+👤 Step 3: Create Admin User
+We created a dedicated admin user for managing this server instead of using the default account.
+bashsudo adduser project-homelab-admin
+Then granted this user sudo (admin) privileges:
+bashsudo usermod -aG sudo project-homelab-admin
+
+🌐 Step 4: Verify Network Configuration
+We checked the network settings to confirm the server received an IP from our DHCP server.
+SettingValueIP Address10.0.2.106 Default Gateway 10.0.2.1 DNS Server 10.0.2.5 (our Dc)
+
+🔗 Step 5: Join the Active Directory Domain
+We joined the Linux server to our Active Directory domain using Winbind (the same method used for the Linux client).
+First we verified connectivity to the domain controller:
+bashping corp.soc-lab-dc.com
+Then joined the domain:
+bashsudo net ads join -U administrator
+Result: Joined 'CORP-SVR' to dns domain 'corp.soc-lab-dc.com' ✅
+
+Verification — AD Users and Computers:
+We switched to the Windows Server and opened Active Directory Users and Computers to confirm the machine appeared under the Computers container.
+Result: CORP-SVR appeared in the domain with DNS name corp-svr.corp.soc-lab-dc.com ✅
+
+Domain Login Test:
+We logged into the Linux server using the domain administrator account to confirm authentication was working:
+bashsudo login
+# Login: CORP+Administrator
+Result: Successfully logged in as domain admin ✅
+
+🐳 Step 6: Install Docker
+We installed Docker on the Linux server following the official documentation at https://docs.docker.com/engine/install/ubuntu.
+Step 1 — Add Docker's official GPG key and repository:
+sudo apt update
+sudo apt install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the Docker repository
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+
+sudo apt update
+
+Step 2 — Install Docker packages:
+sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+Step 3 — Verify Docker installation:
+sudo docker run hello-world
