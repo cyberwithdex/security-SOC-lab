@@ -288,7 +288,7 @@ In VirtualBox, right-click the existing Linux VM → Clone
 Set the new VM name: project-homelab-svr-lin
 Select Full Clone as the clone type
 Click Next → Finish
-![Uploading Screenshot 2026-04-21 134923.png…]()
+<img width="1273" height="890" alt="Screenshot 2026-04-21 134923" src="https://github.com/user-attachments/assets/7c3b68e8-a46f-424a-b593-034c165d5b6f" />
 
 ✏️ Step 2: Change the Hostname
 After cloning, the machine still had the old hostname. We updated it to reflect its new role.
@@ -358,4 +358,154 @@ Step 3 — Verify Docker installation:
 sudo docker run hello-world
 <img width="1280" height="1027" alt="Screenshot 2026-04-21 181323" src="https://github.com/user-attachments/assets/ef184b1e-6d4e-47b4-9723-f12eb0b32bcc" />
 
+📌 About This Project
+This is Day 4 of the SOC Home Lab series. After setting up our AD domain (Day 1), joining a Linux client (Day 2-3), today we build the most important component of the lab — the dedicated security server that will run Wazuh SIEM/XDR.
+Wazuh is an open-source unified XDR and SIEM platform used by thousands of organizations worldwide — including NASA, Cisco, and Intuit. It collects, analyzes, and correlates security events from all endpoints in our lab.
+What we accomplished today:
 
+Cloned the Ubuntu Linux VM to create a dedicated security server
+Renamed the host to sec-box and configured a new static IP
+Created a local service account (sec-user)
+Joined sec-box to the Active Directory domain (corp.soc-lab-dc.com)
+Installed Wazuh 4.14 all-in-one (Manager + Indexer + Dashboard)
+Enrolled 3 agents: Windows 11 client, Ubuntu Linux client, Windows Server DC
+Configured agent.conf for Linux log collection (auth, secure, audit logs)
+ Step-by-Step Configuration
+
+Step 1: Clone the VM from Day 2/3 Snapshot
+Instead of building a fresh Ubuntu VM from scratch, we cloned the existing Linux client VM using VirtualBox:
+<img width="1273" height="890" alt="Screenshot 2026-04-21 134923" src="https://github.com/user-attachments/assets/6c69f81a-6992-4b7a-a446-d8c6fc4ee462" />
+
+
+Source VM: project-homelab-linux-c (Snap linux dc 2)
+Clone name: project-homelab-svr-lin → later renamed project-homelab-linux-secbox
+Clone type: Full Clone
+Snapshot: Current Machine State
+MAC Address Policy: Include only NAT network adapter MAC addresses
+
+Step 2: Rename the Hostname to sec-box
+After booting the cloned VM, rename it to reflect its new role as the security server
+sudo nano /etc/hostname
+Reboot to apply the hostname change
+sudo reboot
+After reboot, verify
+hostname
+# Output: sec-box
+Step 3: Create a Local Service Account
+Add a dedicated local user for managing the security server:
+sudo adduser sec-user
+<img width="808" height="231" alt="Screenshot 2026-04-26 171407" src="https://github.com/user-attachments/assets/e5254183-9947-4ad6-9a0c-010205d6958f" />
+
+Step 4: Configure Static IP Address
+Set a static IP for the security server via Network Manager → IPv4 → Manual:
+IP Address:   10.0.2.10
+Netmask:      255.255.255.0
+Gateway:      10.0.2.1
+DNS:          10.0.2.5  (Domain Controller)
+⚠️ Always point DNS to the Domain Controller. This ensures the server can resolve the AD domain name for the domain join to succeed.
+<img width="750" height="596" alt="Screenshot 2026-04-26 173809" src="https://github.com/user-attachments/assets/8c05e07c-d057-4191-9e8c-8ebaadf7afdb" />
+
+Step 5: Join sec-box to Active Directory
+Since Samba Winbind is already installed from the cloned VM, we just restart the service and join:
+# Restart Winbind service
+sudo systemctl restart winbind
+
+# Join the domain
+sudo net ads join -U Administrator
+<img width="829" height="584" alt="Screenshot 2026-04-26 193602" src="https://github.com/user-attachments/assets/366e697e-87f3-433b-a94d-b891d8359bc1" />
+
+Step 6: Create Domain User — sec user
+On the Windows Domain Controller, open Active Directory Users and Computers and create a new domain user:
+
+First name: sec
+Last name: user
+Display name: sec user
+Username: secuser
+<img width="425" height="535" alt="Screenshot 2026-04-26 194140" src="https://github.com/user-attachments/assets/49396380-924b-4d50-a85e-e63aab0cb704" />
+
+Step 7: Allocate Resources for the Security Server
+Before installing Wazuh, increase the VM resources to handle the SIEM workload:
+In VirtualBox → project-homelab-linux-secbox → Settings → System:
+Base Memory: 8192 MB (8 GB RAM)
+Storage: 80 GB virtual disk
+<img width="782" height="516" alt="Screenshot 2026-04-27 174037" src="https://github.com/user-attachments/assets/2431e8ec-a796-457c-8f0d-91a57c5a4244" />
+
+Wazuh with its OpenSearch indexer backend requires significant RAM. 8 GB is the recommended minimum for a lab environment with 3 agents.
+ <img width="2552" height="1071" alt="Screenshot 2026-04-27 173639" src="https://github.com/user-attachments/assets/72bd99c2-7dcc-4343-a210-dc450600e900" />
+
+Step 8: Install curl
+Wazuh installation requires curl to download the installer script:
+sudo apt install curl
+
+Step 9: Install Wazuh 4.14 (All-in-One)
+Download and run the official Wazuh installation assistant:
+curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh && sudo bash ./wazuh-install.sh -a
+<img width="816" height="577" alt="Screenshot 2026-04-27 175915" src="https://github.com/user-attachments/assets/6b4c5435-5ad7-40b8-8c7b-71d9f61b167e" />
+
+The -a flag installs all components:
+Wazuh Manager — core SIEM engine
+Wazuh Indexer — OpenSearch backend for event storage
+Wazuh Dashboard — web UI at https://10.0.2.10
+
+
+Step 10: Access the Wazuh Dashboard
+Open a browser and navigate to:
+https://10.0.2.10
+
+Username: admin
+Password: [auto-generated — shown at end of install script]
+<img width="1211" height="914" alt="Screenshot 2026-04-27 181429" src="https://github.com/user-attachments/assets/81a4852c-1be8-48eb-9f64-d5c9e5e1998c" />
+
+Step 11: Enroll Agent 1 — Ubuntu Linux Client (proj-lab-lin-c)
+From the Wazuh Dashboard → Endpoints → Deploy new agent:
+Agent deployment command (run on proj-lab-lin-c):
+
+wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_4.14.5-1_amd64.deb \
+&& sudo WAZUH_MANAGER='10.0.2.10' \
+WAZUH_AGENT_NAME='project-homelab-linux-c' \
+dpkg -i ./wazuh-agent_4.14.5-1_amd64.deb
+<img width="1197" height="888" alt="Screenshot 2026-04-27 191030" src="https://github.com/user-attachments/assets/b8a4a27f-70b1-4592-92f0-cd1e559efdcb" />
+
+Start the agent:
+sudo systemctl daemon-reload
+sudo systemctl enable wazuh-agent
+sudo systemctl start wazuh-agent
+
+Step 12: Enroll Agent 2 — Windows 11 Client
+doing the samerhing from linux but here we will the the powershell don't forget to run it as administrator 
+From PowerShell (Administrator) on the Windows 11 client:
+<img width="1114" height="336" alt="Screenshot 2026-04-27 191609" src="https://github.com/user-attachments/assets/00377600-9076-45b1-945f-591398e69c9e" />
+
+Invoke-WebRequest -Uri https://packages.wazuh.com/4.x/windows/wazuh-agent-4.14.5-1.msi -OutFile $env:tmp\wazuh-agent.msi
+msiexec.exe /i $env:tmp\wazuh-agent /q WAZUH_MANAGER='10.0.2.10' WAZUH_AGENT_NAME='project-homelab-winclient'
+
+ Step 13: Enroll Agent 3 — Windows Server (Active Directory DC)
+From PowerShell (Administrator) on the Domain Controller  
+<img width="1216" height="977" alt="Screenshot 2026-04-27 191721" src="https://github.com/user-attachments/assets/52e6b206-067a-44ff-a5a9-9cc3447ce42c" />
+
+Step 15: Configure Linux Agent Log Collection
+In Wazuh Dashboard → Endpoints → Groups → linux group → agent.conf:
+<img width="1212" height="531" alt="Screenshot 2026-04-28 234108" src="https://github.com/user-attachments/assets/055e3231-d7c9-4a00-8d8c-c08ba0d1789f" />
+
+<agent_config>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/secure</location>
+  </localfile>
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+</agent_config>
+
+Log files being monitored:
+/var/log/auth.log — SSH logins, sudo usage, authentication events
+/var/log/secure — PAM authentication, security events
+/var/log/audit/audit.log — Linux audit framework events
+<img width="1203" height="349" alt="Screenshot 2026-04-28 234026" src="https://github.com/user-attachments/assets/b473830b-2cc3-477c-8c76-f19de329a8e7" />
+
+also don't forget to config your windows agent.conf of windows group 
