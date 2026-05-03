@@ -1,0 +1,126 @@
+📌 About This Project
+This is Day 4 of the SOC Home Lab series. After setting up our AD domain (Day 1), joining a Linux client (Day 2-3), today we build the most important component of the lab — the dedicated security server that will run Wazuh SIEM/XDR.
+Wazuh is an open-source unified XDR and SIEM platform used by thousands of organizations worldwide — including NASA, Cisco, and Intuit. It collects, analyzes, and correlates security events from all endpoints in our lab.
+What we accomplished today:
+
+Cloned the Ubuntu Linux VM to create a dedicated security server
+Renamed the host to sec-box and configured a new static IP
+Created a local service account (sec-user)
+Joined sec-box to the Active Directory domain (corp.soc-lab-dc.com)
+Installed Wazuh 4.14 all-in-one (Manager + Indexer + Dashboard)
+Enrolled 3 agents: Windows 11 client, Ubuntu Linux client, Windows Server DC
+Configured agent.conf for Linux log collection (auth, secure, audit logs)
+ Step-by-Step Configuration
+
+Step 1: Clone the VM from Day 2/3 Snapshot
+Instead of building a fresh Ubuntu VM from scratch, we cloned the existing Linux client VM using VirtualBox:
+
+Source VM: project-homelab-linux-c (Snap linux dc 2)
+Clone name: project-homelab-svr-lin → later renamed project-homelab-linux-secbox
+Clone type: Full Clone
+Snapshot: Current Machine State
+MAC Address Policy: Include only NAT network adapter MAC addresses
+
+Step 2: Rename the Hostname to sec-box
+After booting the cloned VM, rename it to reflect its new role as the security server
+sudo nano /etc/hostname
+Reboot to apply the hostname change
+sudo reboot
+After reboot, verify
+hostname
+# Output: sec-box
+Step 3: Create a Local Service Account
+Add a dedicated local user for managing the security server:
+sudo adduser sec-user
+Step 4: Configure Static IP Address
+Set a static IP for the security server via Network Manager → IPv4 → Manual:
+IP Address:   10.0.2.10
+Netmask:      255.255.255.0
+Gateway:      10.0.2.1
+DNS:          10.0.2.5  (Domain Controller)
+⚠️ Always point DNS to the Domain Controller. This ensures the server can resolve the AD domain name for the domain join to succeed.
+Step 5: Join sec-box to Active Directory
+Since Samba Winbind is already installed from the cloned VM, we just restart the service and join:
+# Restart Winbind service
+sudo systemctl restart winbind
+
+# Join the domain
+sudo net ads join -U Administrator
+Step 6: Create Domain User — sec user
+On the Windows Domain Controller, open Active Directory Users and Computers and create a new domain user:
+
+First name: sec
+Last name: user
+Display name: sec user
+Username: secuser
+Step 7: Allocate Resources for the Security Server
+Before installing Wazuh, increase the VM resources to handle the SIEM workload:
+In VirtualBox → project-homelab-linux-secbox → Settings → System:
+
+Base Memory: 8192 MB (8 GB RAM)
+Storage: 80 GB virtual disk
+ Wazuh with its OpenSearch indexer backend requires significant RAM. 8 GB is the recommended minimum for a lab environment with 3 agents.
+Step 8: Install curl
+Wazuh installation requires curl to download the installer script:
+sudo apt install curl
+
+Step 9: Install Wazuh 4.14 (All-in-One)
+Download and run the official Wazuh installation assistant:
+curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh && sudo bash ./wazuh-install.sh -a
+The -a flag installs all components:
+Wazuh Manager — core SIEM engine
+Wazuh Indexer — OpenSearch backend for event storage
+Wazuh Dashboard — web UI at https://10.0.2.10
+
+
+Step 10: Access the Wazuh Dashboard
+Open a browser and navigate to:
+https://10.0.2.10
+
+Username: admin
+Password: [auto-generated — shown at end of install script]
+
+Step 11: Enroll Agent 1 — Ubuntu Linux Client (proj-lab-lin-c)
+From the Wazuh Dashboard → Endpoints → Deploy new agent:
+Agent deployment command (run on proj-lab-lin-c):
+
+wget https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/wazuh-agent_4.14.5-1_amd64.deb \
+&& sudo WAZUH_MANAGER='10.0.2.10' \
+WAZUH_AGENT_NAME='project-homelab-linux-c' \
+dpkg -i ./wazuh-agent_4.14.5-1_amd64.deb
+
+Start the agent:
+sudo systemctl daemon-reload
+sudo systemctl enable wazuh-agent
+sudo systemctl start wazuh-agent
+
+Step 12: Enroll Agent 2 — Windows 11 Client
+From PowerShell (Administrator) on the Windows 11 client:
+
+Invoke-WebRequest -Uri https://packages.wazuh.com/4.x/windows/wazuh-agent-4.14.5-1.msi -OutFile $env:tmp\wazuh-agent.msi
+msiexec.exe /i $env:tmp\wazuh-agent /q WAZUH_MANAGER='10.0.2.10' WAZUH_AGENT_NAME='project-homelab-winclient'
+
+ Step 13: Enroll Agent 3 — Windows Server (Active Directory DC)
+From PowerShell (Administrator) on the Domain Controller  
+
+Step 15: Configure Linux Agent Log Collection
+In Wazuh Dashboard → Endpoints → Groups → linux group → agent.conf:
+<agent_config>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/auth.log</location>
+  </localfile>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/secure</location>
+  </localfile>
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+</agent_config>
+
+Log files being monitored:
+/var/log/auth.log — SSH logins, sudo usage, authentication events
+/var/log/secure — PAM authentication, security events
+/var/log/audit/audit.log — Linux audit framework events
